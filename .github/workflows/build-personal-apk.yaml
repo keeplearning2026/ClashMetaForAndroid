@@ -8,6 +8,7 @@ on:
     branches: [main]
     paths:
       - .github/workflows/build-personal-apk.yaml
+      - core/src/main/cpp/CMakeLists.txt
 
 permissions:
   contents: read
