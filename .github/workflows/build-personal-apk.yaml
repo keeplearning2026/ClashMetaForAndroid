@@ -17,6 +17,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    env:
+      GOTOOLCHAIN: local
     steps:
       - name: Checkout source and submodules
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -50,20 +52,20 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
 
-      - name: Set up upstream custom Go toolchain
-        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c
-        with:
-          go-download-base-url: https://github.com/MetaCubeX/go/releases/download/build
-          go-version: '1.26'
-
-      - name: Apply upstream Go Android compatibility patches
+      - name: Install official Go 1.26.10 (SHA-256 verified)
         shell: bash
         run: |
           set -euo pipefail
-          cd "$(go env GOROOT)"
-          for p in "$GITHUB_WORKSPACE"/.github/patch/*.patch; do
-            patch --batch -p1 < "$p"
-          done
+          GO_ARCHIVE="$RUNNER_TEMP/go1.26.10.linux-amd64.tar.gz"
+          curl --fail --location --retry 3 --output "$GO_ARCHIVE" \
+            https://go.dev/dl/go1.26.10.linux-amd64.tar.gz
+          echo "ccfe7ae822d2c2f41f4fe7c956199967a4dac22d0ee0d2b2bfdb440aab3b20c5  $GO_ARCHIVE" | sha256sum --check --status
+          echo "Official Go archive SHA-256 verified"
+          tar -C "$RUNNER_TEMP" -xzf "$GO_ARCHIVE"
+          echo "$RUNNER_TEMP/go/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/go/bin/go" version
+          "$RUNNER_TEMP/go/bin/go" env GOROOT
+          # Do not modify the downloaded Go toolchain or apply third-party runtime patches.
 
       - name: Update CA certificates for mihomo
         shell: bash
@@ -107,7 +109,8 @@ jobs:
             echo "- **Version:** v$APP_VERSION.Meta (versionCode $APP_CODE)"
             echo "- **Source commit:** \`$GITHUB_SHA\`"
             echo "- **Build variant:** MetaRelease (optimized, signed with temporary CI debug key)"
-            echo "- **Download:** CMFA-v$APP_VERSION-MetaRelease-run$GITHUB_RUN_NUMBER"
+
+            echo "- **Go toolchain:** Official Go 1.26.10, SHA-256 verified (unpatched)"            echo "- **Download:** CMFA-v$APP_VERSION-MetaRelease-run$GITHUB_RUN_NUMBER"
             echo "- **Integrity:** Verify against SHA256SUMS.txt included in the artifact"
             echo "- **Note:** A new CI debug signing key may prevent in-place upgrades."
           } >> "$GITHUB_STEP_SUMMARY"
